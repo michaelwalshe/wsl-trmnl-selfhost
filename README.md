@@ -305,6 +305,20 @@ This is a two-pass workflow, because the Playlist step needs a Screen that
 only exists after a Build, and the Build needs a Model that only exists
 after the first pass:
 
+> **`INTERVAL`/`UNIT` set how often Terminus polls the Exchange and
+> rebuilds the screen -- not how often the device fetches.** `GET
+> /api/display` (what the Kindle calls) always serves whatever screen is
+> currently built; it never renders on demand (confirmed against
+> `app/actions/api/display/show.rb`, which just returns the device's
+> current Playlist screen). Set this shorter than, and independent of, how
+> often your device actually polls -- e.g. every 15 minutes here even
+> though the Kindle itself might only fetch every couple of hours over
+> Wake-on-LAN (see step 9) -- so whatever the device does see is never far
+> out of date. Terminus supports minute-level granularity
+> (`app/aspects/croner.rb`); a `unit` of `"none"` disables scheduled
+> rebuilds entirely (the extension will never update itself), so don't
+> leave it there by accident.
+
 **Pass 1 - create the Extension, Exchange, and Model:**
 
 ```bash
@@ -317,7 +331,7 @@ docker exec \
   -e EXTENSION_LABEL="Week and Weather" \
   -e TEMPLATE_FILE=/tmp/full.terminus.liquid \
   -e EXCHANGE_URL=http://<desktop-lan-ip>:8090/data \
-  -e INTERVAL=2 -e UNIT=hour \
+  -e INTERVAL=15 -e UNIT=minute \
   terminus-web-1 bash -c 'cd /app && bundle exec ruby /tmp/manage_extension.rb'
 
 # Model + Device (real API), MAC is your Kindle's, found via
@@ -353,7 +367,7 @@ docker exec \
   -e EXTENSION_NAME=week_and_weather -e EXTENSION_LABEL="Week and Weather" \
   -e TEMPLATE_FILE=/tmp/full.terminus.liquid \
   -e EXCHANGE_URL=http://<desktop-lan-ip>:8090/data \
-  -e INTERVAL=2 -e UNIT=hour -e BUILD_MODEL_ID=<model-id-from-pass-1> \
+  -e INTERVAL=15 -e UNIT=minute -e BUILD_MODEL_ID=<model-id-from-pass-1> \
   terminus-web-1 bash -c 'cd /app && bundle exec ruby /tmp/manage_extension.rb'
 
 # Re-run setup.sh with the same env vars as before, the screen exists
@@ -448,6 +462,25 @@ If something silently fails, `crash.log` on the Kindle (root of the drive
 it mounts as, inside `/koreader/`) is the actual place to look, KOReader
 keeps running other plugins even if one errors, so failures don't surface
 in the UI on their own.
+
+> **Why disabling `trmnl.koplugin`'s auto-refresh doesn't just skip a
+> redundant timer.** That auto-refresh also calls
+> `UIManager:preventStandby()` to keep the device from sleeping between
+> refreshes, disabling it therefore also re-enables normal sleep, and
+> nothing else was replacing that. Worse, `preventStandby()` is a no-op on
+> Kindle anyway (`canStandby()` is `false` for every Kindle model in
+> KOReader; it's a lighter power state Kindle hardware doesn't expose
+> there), and an RTC wakeup alarm isn't available either
+> (`Device.wakeup_mgr` only gets set up if `liblipclua` loaded, which on a
+> Kindle 4 jailbreak it may not). `wol.koplugin` works around this itself:
+> while auto-wake is enabled it shells out to
+> `lipc-set-prop com.lab126.powerd preventScreenSaver 1/0`, the same
+> mechanism KOReader's own bundled `keepalive.koplugin` uses for Kindle.
+> Without it, the device fully suspends after its normal idle timeout and
+> `UIManager:scheduleIn` (what drives the wake schedule) simply doesn't run
+> again until something else wakes the device -- confirmed against
+> KOReader's own frontend source (`frontend/device/kindle/powerd.lua`,
+> `frontend/ui/uimanager.lua`), not guessed.
 
 ### 9. Power management
 

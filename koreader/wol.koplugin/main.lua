@@ -11,15 +11,30 @@ only depends on that plugin's public dispatcher event ("TrmnlFetch"), never
 its internals, so an update to trmnl.koplugin can't break this. Disable
 trmnl.koplugin's own "Enable auto-refresh" when using this, so there is one
 schedule driving fetches, not two independent ones.
+
+Also takes over keeping the device awake between wakes, since disabling
+trmnl.koplugin's own auto-refresh above also disables the sleep-prevention
+that came bundled with it. trmnl.koplugin does this via
+UIManager:preventStandby(), but that's a no-op on Kindle -- every Kindle
+model reports canStandby() == false in KOReader, "standby" being a lighter
+power state Kindle hardware doesn't expose there. What actually works on
+Kindle is the same mechanism KOReader's own bundled keepalive.koplugin
+uses: `lipc-set-prop com.lab126.powerd preventScreenSaver 1/0`, talking
+directly to Amazon's own powerd rather than KOReader's suspend logic. (An
+RTC wakeup alarm, KOReader's usual answer for "wake a fully suspended
+device", isn't an option here either -- it needs Device.wakeup_mgr, which
+KOReader only sets up if liblipclua loaded, and on this device it doesn't.)
 ]]
 
 local DataStorage = require("datastorage")
+local Device = require("device")
 local Dispatcher = require("dispatcher")
 local Event = require("ui/event")
 local InfoMessage = require("ui/widget/infomessage")
 local LuaSettings = require("luasettings")
 local MultiInputDialog = require("ui/widget/multiinputdialog")
 local NetworkMgr = require("ui/network/manager")
+local PluginShare = require("pluginshare")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local logger = require("logger")
@@ -177,8 +192,32 @@ function WolWake:_doWakeAndFetch()
     end)
 end
 
+-- Keep the device from fully sleeping between wakes -- see the file header
+-- comment for why this needs a Kindle-specific path rather than the
+-- standby-prevention KOReader plugins normally use.
+function WolWake:preventAutoSuspend()
+    if Device:isKindle() then
+        os.execute("lipc-set-prop com.lab126.powerd preventScreenSaver 1")
+    elseif Device:isKobo() or Device:isCervantes() then
+        PluginShare.pause_auto_suspend = true
+    else
+        logger.warn("WoL: no known sleep-prevention method for this device -- auto-wake may be missed if it fully suspends")
+    end
+    logger.info("WoL: device sleep prevented (auto-wake active)")
+end
+
+function WolWake:allowAutoSuspend()
+    if Device:isKindle() then
+        os.execute("lipc-set-prop com.lab126.powerd preventScreenSaver 0")
+    elseif Device:isKobo() or Device:isCervantes() then
+        PluginShare.pause_auto_suspend = false
+    end
+    logger.info("WoL: device sleep re-enabled (normal behavior)")
+end
+
 function WolWake:startAutoWake()
     self.auto_wake_enabled = true
+    self:preventAutoSuspend()
     -- Run the first cycle now rather than waiting a full interval, matching
     -- trmnl.koplugin's own "enable auto-refresh" behaviour. wake_task
     -- reschedules itself for the next interval once this cycle's send is done.
@@ -189,6 +228,7 @@ end
 function WolWake:stopAutoWake()
     self.auto_wake_enabled = false
     UIManager:unschedule(self.wake_task)
+    self:allowAutoSuspend()
 end
 
 function WolWake:scheduleNextWake()
@@ -233,6 +273,9 @@ end
 function WolWake:onCloseWidget()
     logger.dbg("WoL: Plugin closing")
     UIManager:unschedule(self.wake_task)
+    if self.auto_wake_enabled then
+        self:allowAutoSuspend()
+    end
 end
 
 function WolWake:showConfigDialog()

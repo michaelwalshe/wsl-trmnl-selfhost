@@ -1,0 +1,228 @@
+css:
+  properties:
+    - "--screen-w"
+    - "--screen-h"
+    - "--pixel-ratio"
+    - "--dither-pixel-ratio"
+    - "--ui-scale"
+    - "--gap-scale"
+    # Added for trmnl-calendar-weather's full.liquid. Checked directly
+    # against Sanitize::Config::RELAXED's own defaults (see
+    # `bundle exec ruby -e 'require "sanitize"; puts
+    # Sanitize::Config::RELAXED[:css][:properties]'` inside the web
+    # container) rather than assumed: RELAXED already permits essentially
+    # every standard property this template uses (display, position,
+    # top/left/width/height, grid-template-columns, background, clip-path,
+    # -webkit-line-clamp, etc.) unmodified. Only two kinds of gap exist:
+    #
+    # 1. CSS custom properties, which RELAXED allows none of by default.
+    #    These carry Liquid-computed values (gutter width, panel-relative
+    #    pixel heights, the sun-curve clip-path points), so they can't be
+    #    replaced with a framework token -- the same category as Terminus's
+    #    own --screen-w/--screen-h additions above.
+    # 2. `place-content`, the one shorthand RELAXED doesn't cover (its
+    #    longhands align-content/justify-content are fine). Left as the
+    #    shorthand rather than rewritten because this repo's own
+    #    `trmnlp lint` caps `justify-content` occurrences at 6 total across
+    #    all four templates -- allowlisting one property fits its existing
+    #    constraints better than spending that budget.
+    - "--ad-h"
+    - "--gut"
+    - "--head-h"
+    - "--ink"
+    - "--paper"
+    - "--sun-h"
+    - "--sun-shape"
+    - "--sun-under"
+    - "--tile-size"
+    - "--wx-h"
+    - place-content
+    - white-space
+    - width
+elements:
+  - canvas
+  - circle
+  - defs
+  - ellipse
+  - g
+  - html
+  - line
+  - link
+  - path
+  - polygon
+  - polyline
+  - rect
+  - script
+  - source
+  - style
+  - svg
+  - text
+  - tspan
+attributes:
+  :all:
+    - :data
+    - class
+    - dir
+    - hidden
+    - id
+    - lang
+    - style
+    - tabindex
+    - title
+    - translate
+  canvas:
+    - id
+    - width
+    - height
+  circle:
+    - cx
+    - cy
+    - r
+    - stroke
+    - stroke-dasharray
+    - stroke-dashoffset
+    - stroke-opacity
+    - stroke-width
+    - fill
+    - fill-opacity
+    - shape-rendering
+    - transform
+  ellipse:
+    - cx
+    - cy
+    - rx
+    - ry
+    - stroke
+    - stroke-dasharray
+    - stroke-dashoffset
+    - stroke-opacity
+    - stroke-width
+    - fill
+    - fill-opacity
+    - shape-rendering
+    - transform
+  g:
+    - stroke
+    - stroke-width
+    - fill
+    - transform
+  line:
+    - x1
+    - x2
+    - y1
+    - y2
+    - stroke
+    - stroke-dasharray
+    - stroke-dashoffset
+    - stroke-linecap
+    - stroke-opacity
+    - stroke-width
+    - shape-rendering
+    - transform
+  link:
+    - href
+    - rel
+  path:
+    - d
+    - stroke
+    - stroke-dasharray
+    - stroke-dashoffset
+    - stroke-linecap
+    - stroke-linejoin
+    - stroke-opacity
+    - stroke-width
+    - fill
+    - fill-opacity
+    - shape-rendering
+    - transform
+  polygon:
+    - points
+    - stroke
+    - stroke-dasharray
+    - stroke-dashoffset
+    - stroke-linejoin
+    - stroke-opacity
+    - stroke-width
+    - fill
+    - fill-opacity
+    - shape-rendering
+    - transform
+  polyline:
+    - points
+    - stroke
+    - stroke-dasharray
+    - stroke-dashoffset
+    - stroke-linecap
+    - stroke-linejoin
+    - stroke-opacity
+    - stroke-width
+    - fill
+    - fill-opacity
+    - shape-rendering
+    - transform
+  rect:
+    - x
+    - y
+    - width
+    - height
+    - rx
+    - ry
+    - stroke
+    - stroke-dasharray
+    - stroke-dashoffset
+    - stroke-linejoin
+    - stroke-opacity
+    - stroke-width
+    - fill
+    - fill-opacity
+    - shape-rendering
+    - transform
+  script:
+    - src
+  source:
+    - type
+    - src
+    - srcset
+    - sizes
+    - media
+    - height
+    - width
+  svg:
+    - height
+    - width
+    - x
+    - y
+    - version
+    - viewbox
+    - shape-rendering
+  text:
+    - x
+    - y
+    - dx
+    - dy
+    - rotate
+    - stroke
+    - stroke-dasharray
+    - stroke-dashoffset
+    - stroke-linecap
+    - stroke-linejoin
+    - stroke-opacity
+    - stroke-width
+    - fill
+    - fill-opacity
+    - transform
+  tspan:
+    - x
+    - y
+    - dx
+    - dy
+    - rotate
+    - stroke
+    - stroke-dasharray
+    - stroke-dashoffset
+    - stroke-linecap
+    - stroke-linejoin
+    - stroke-opacity
+    - stroke-width
+    - fill
+    - fill-opacity

@@ -1,0 +1,13 @@
+# Secrets -- never commit these
+secrets/
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.ruff_cache/
+
+# Generated, not source: rebuild with liquid/build.ps1
+liquid/full.terminus.liquid
+liquid/full.original.liquid

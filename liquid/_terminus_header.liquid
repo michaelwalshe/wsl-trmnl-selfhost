@@ -1,0 +1,41 @@
+{%- comment -%}
+================================================================================
+  Terminus adapter header -- prepended to the unmodified full.liquid from
+  trmnl-calendar-weather (see full.original.liquid alongside this file).
+
+  TRMNL Core's "Plugin Merge" strategy resolves calendar_source/weather_source/
+  hourly_source directly as top-level variables. Terminus's Extension "Poll"
+  Exchanges instead land the polled JSON under source_1 (source_2, ... for
+  additional exchanges). This server's data service returns one JSON object
+  with all three keys, wired to a single Exchange, so source_1 carries all of
+  them -- alias them back to the names the unmodified template expects.
+
+  Custom fields (days, hour_from, hour_to, now_line, screen_height) came from
+  TRMNL Core's settings form for a distributable plugin. This is a
+  single-purpose deployment for one Kindle at 800x600, so they're hardcoded
+  here instead of built as a form.
+================================================================================
+{%- endcomment -%}
+{%- assign calendar_source = source_1.calendar_source -%}
+{%- assign weather_source = source_1.weather_source -%}
+{%- assign hourly_source = source_1.hourly_source -%}
+
+{%- assign days = "7" -%}
+{%- assign week_start = "rolling" -%}
+{%- assign now_line = "yes" -%}
+{%- assign hour_from = "" -%}
+{%- assign hour_to = "" -%}
+{%- assign screen_height = "600" -%}
+
+{%- comment -%}
+  Terminus's extension renderer drops our HTML straight into <body> with no
+  wrapper -- unlike TRMNL Core's cloud renderer, which supplies the
+  .screen/.view wrapper itself. full.liquid assumes the host does this (see
+  tools/render.py's SKELETON in the original repo, which does the same thing
+  for local preview), so we supply it ourselves here. screen--amazon_kindle_7
+  matches the Kindle 4 landscape target (800x600) this plugin is designed
+  for; Terminus's own per-Model sizing (if any) still layers on top via the
+  plain "screen" class its layout CSS targets separately.
+{%- endcomment -%}
+<div class="screen screen--no-bleed screen--2bit screen--amazon_kindle_7">
+  <div class="view view--full">

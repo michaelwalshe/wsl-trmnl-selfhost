@@ -1,0 +1,22 @@
+name: "trmnl-data"
+
+services:
+  data:
+    build: ./app
+    image: trmnl-data:latest
+    environment:
+      SECRETS_DIR: /secrets
+      WEATHER_LATITUDE: ${WEATHER_LATITUDE:?set in .env, see .env.example}
+      WEATHER_LONGITUDE: ${WEATHER_LONGITUDE:?set in .env, see .env.example}
+      LOCAL_TIMEZONE: ${LOCAL_TIMEZONE:?set in .env, see .env.example}
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./secrets:/secrets:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8090/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

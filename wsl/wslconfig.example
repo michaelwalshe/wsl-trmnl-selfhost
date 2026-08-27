@@ -1,0 +1,18 @@
+# Copy to %UserProfile%\.wslconfig on the Windows side (i.e.
+# C:\Users\<you>\.wslconfig), then `wsl --shutdown` and restart WSL to apply.
+#
+# instanceIdleTimeout / vmIdleTimeout: WSL stops the whole VM after ~60
+# seconds of no attached `wsl.exe` process by default -- even with systemd
+# and containers actively running inside. -1 disables that. Without this,
+# the server gets silently killed a minute after you last ran a `wsl`
+# command, which looks exactly like a crash but isn't.
+[general]
+instanceIdleTimeout=-1
+
+[wsl2]
+# Mirrored networking: WSL shares the host's actual LAN IP instead of a NAT
+# address behind it, so other devices on your network (the Kindle) can
+# reach containers running inside WSL directly. Requires WSL >= 2.0.0;
+# check with `wsl --version`.
+networkingMode=mirrored
+vmIdleTimeout=-1

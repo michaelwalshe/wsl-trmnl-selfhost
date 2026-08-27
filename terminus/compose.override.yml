@@ -1,0 +1,19 @@
+name: "terminus"
+
+# Local override, not part of the upstream repo: widens the CSS property
+# allowlist the HTML sanitizer applies to extension screens. Stock Terminus
+# only allows six framework-scale custom properties, which silently strips
+# nearly all of trmnl-calendar-weather's own <style> block (--gut, --wx-h,
+# place-content, grid-template-columns, etc.) since it styles itself with
+# plain CSS rather than inline style="" attributes. Safe here because this
+# server only ever runs extensions we authored ourselves.
+#
+# Expects sanitize.yml copied in alongside this file (see this repo's
+# README, step 3) -- both live directly in the Terminus checkout's root.
+services:
+  web:
+    volumes:
+      - ./sanitize.yml:/app/config/sanitize.yml:ro
+  worker:
+    volumes:
+      - ./sanitize.yml:/app/config/sanitize.yml:ro

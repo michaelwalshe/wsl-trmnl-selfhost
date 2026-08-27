@@ -1,0 +1,31 @@
+# Copy to ~/.config/systemd/user/trmnl-stack.service inside WSL, then:
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now trmnl-stack.service
+#
+# Explicitly runs `docker compose up -d` for both stacks on boot, rather
+# than relying on Podman's own restart:unless-stopped policy -- that policy
+# needs a per-container supervisor process that's still alive to act on,
+# which does not survive a full WSL VM cold-boot (confirmed the hard way:
+# after a real restart, containers were left in "Created" but never
+# started). This unit is what actually brings everything back.
+
+[Unit]
+Description=Bring up the Terminus + trmnl-data compose stacks
+After=podman.socket
+Requires=podman.socket
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# UID 1000 is the default first-user UID on most Linux distros including
+# WSL -- check yours with `id -u` if this socket path doesn't exist.
+Environment=DOCKER_HOST=unix:///run/user/1000/podman/podman.sock
+# Adjust these two paths if you cloned usetrmnl/terminus or this repo
+# somewhere other than directly under your home directory.
+ExecStart=/usr/local/bin/docker-compose -f %h/terminus/compose.yml -f %h/terminus/compose.override.yml up -d
+ExecStart=/usr/local/bin/docker-compose -f %h/trmnl-selfhost/compose.yml up -d
+ExecStop=/usr/local/bin/docker-compose -f %h/terminus/compose.yml -f %h/terminus/compose.override.yml down
+ExecStop=/usr/local/bin/docker-compose -f %h/trmnl-selfhost/compose.yml down
+
+[Install]
+WantedBy=default.target

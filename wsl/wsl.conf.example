@@ -1,0 +1,10 @@
+# Copy to /etc/wsl.conf inside the WSL distro (needs sudo), replacing
+# <your-linux-username> with your actual username. systemd=true is what
+# lets Podman's rootless socket, and the trmnl-stack.service unit in this
+# repo, run as real background services instead of dying when no terminal
+# is attached.
+[boot]
+systemd=true
+
+[user]
+default=<your-linux-username>

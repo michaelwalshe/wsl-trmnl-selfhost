@@ -1,0 +1,25 @@
+[project]
+name = "trmnl-data-service"
+version = "0.1.0"
+description = "Calendar + weather data source for a self-hosted Terminus TRMNL extension"
+requires-python = ">=3.12"
+dependencies = [
+    "flask>=3.1,<4",
+    "requests>=2.32,<3",
+    "google-auth-oauthlib>=1.2,<2",
+    "google-api-python-client>=2,<3",
+    "gunicorn>=23,<24",
+]
+
+[dependency-groups]
+dev = ["ruff>=0.16"]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

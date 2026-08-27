@@ -23,12 +23,12 @@ of TRMNL's own hosted plugins.
 ```
 Kindle 4 (KOReader)                       Desktop, in WSL2/Podman
 
-  wol.koplugin                            
-    │ sends a WoL magic packet before                
-    │ each fetch (desktop sleeps when idle)           
-    ▼                                                 
-  [ desktop wakes ]                                   
-                                                       
+  wol.koplugin
+    │ sends a WoL magic packet before
+    │ each fetch (desktop sleeps when idle)
+    ▼
+  [ desktop wakes ]
+
   trmnl.koplugin  ── GET /api/display ──────────▶  Terminus (:2300)
                                                        │
                                                        │ polls on a schedule
@@ -84,13 +84,25 @@ Copy the config templates, adjusting the placeholders:
 
 Then `wsl --shutdown` and reopen a WSL terminal for both to take effect.
 
-Run the bootstrap script to install Podman and Docker Compose v2 (path is
-this repo's location as WSL sees it -- a Windows path like
-`C:\Users\you\source\trmnl-selfhost` is `/mnt/c/Users/you/source/trmnl-selfhost`
-from inside WSL):
+**Clone this repo natively inside WSL**, not onto a Windows path mounted via
+`/mnt/c/...` -- git and Docker builds are both meaningfully slower and less
+reliable across that mount, and it's what the rest of this guide assumes:
 
-```powershell
-wsl -d Ubuntu -u root -- bash /mnt/c/path/to/this/repo/wsl/bootstrap.sh
+```bash
+git clone <this-repo-url> ~/trmnl-selfhost
+cd ~/trmnl-selfhost
+```
+
+If you also want to edit the dashboard's Liquid template from Windows
+tooling (see step 5), this WSL path is reachable from Windows at
+`\\wsl.localhost\<distro-name>\home\<you>\trmnl-selfhost` -- Explorer, VS
+Code's WSL extension, and PowerShell can all use it directly, no separate
+Windows-side copy needed.
+
+Run the bootstrap script to install Podman and Docker Compose v2:
+
+```bash
+sudo bash wsl/bootstrap.sh
 ```
 
 > **Why Podman, and why a manually-installed Compose v2 binary:** see the
@@ -107,7 +119,7 @@ traffic still needs a firewall opening on the Windows side:
 
 ```powershell
 # elevated PowerShell
-.\windows\setup-network.ps1
+& "\\wsl.localhost\Ubuntu\home\<you>\trmnl-selfhost\windows\setup-network.ps1"
 ```
 
 This opens TCP 2300 (Terminus) and 8090 (the data service) through both the
@@ -132,9 +144,14 @@ and confirm the port matches (`2300` by default), fixing it if the value
 came out malformed (some versions leave a literal `$HANAMI_PORT` in there
 instead of expanding it).
 
-Copy [`terminus/compose.override.yml`](terminus/compose.override.yml) and
-[`terminus/sanitize.yml`](terminus/sanitize.yml) from this repo into
-`~/terminus/`, then:
+Copy this repo's Terminus config overrides in (both clones are siblings
+under your home directory, per step 1):
+
+```bash
+cp ~/trmnl-selfhost/terminus/compose.override.yml ~/trmnl-selfhost/terminus/sanitize.yml ~/terminus/
+```
+
+Then:
 
 ```bash
 docker compose up -d
@@ -220,17 +237,19 @@ docker compose up -d
 ### 5. The Liquid template
 
 This repo doesn't vendor a copy of the dashboard's `full.liquid` -- that
-lives in its own template repo and would just go stale here. Instead:
+lives in its own template repo and would just go stale here. Run from
+Windows (this writes into the WSL clone via its `\\wsl.localhost\...` path,
+same as step 1):
 
 ```powershell
-.\liquid\build.ps1 -UpstreamPath C:\path\to\trmnl-calendar-weather
+& "\\wsl.localhost\Ubuntu\home\<you>\trmnl-selfhost\liquid\build.ps1" -UpstreamPath C:\path\to\trmnl-calendar-weather
 ```
 
 This concatenates [`_terminus_header.liquid`](liquid/_terminus_header.liquid)
 + the upstream `full.liquid` + [`_terminus_footer.liquid`](liquid/_terminus_footer.liquid)
-into `full.terminus.liquid`. The header/footer do two things the original
-template doesn't need to worry about, since they're specific to how
-Terminus's rendering model differs from TRMNL cloud's:
+into `liquid/full.terminus.liquid`. The header/footer do two things the
+original template doesn't need to worry about, since they're specific to
+how Terminus's rendering model differs from TRMNL cloud's:
 
 1. **Alias `source_1.*` to the variable names the template expects.**
    TRMNL cloud's "Plugin Merge" strategy resolves `calendar_source` /
@@ -245,32 +264,96 @@ Terminus's rendering model differs from TRMNL cloud's:
    Without it, the framework CSS driving the day-grid's sizing has nothing
    to attach to and the whole layout collapses to unstyled block flow.
 
-In Terminus:
+### 6. Extension, Model, Device, Playlist
 
-1. **Extensions → New.** Label anything, **Kind: Poll**.
-2. **Model**: create a custom model matching your device's real resolution
-   and **Rotation: 0** (landscape). Don't reuse one of Terminus's seeded
-   device models unless you've checked its Rotation value first -- several
-   ship with `Rotation: 90` baked in for portrait-native e-readers, which
-   silently rotates an otherwise-correct 800x600 landscape render.
-   Custom models also need their **CSS** field populated with something
-   valid (e.g. `{"classes": {}, "variables": []}`) -- Terminus's
-   `Model#css_classes` throws on a `nil` CSS field for a custom model,
-   which surfaces as a 500 error when building/previewing.
-3. Paste `full.terminus.liquid`'s contents into the **Template** field.
-4. **Exchanges → New**: Verb `GET`, **Template** field (yes, that's the URL
-   field, despite the name -- it supports Liquid templating for dynamic
-   URLs, a plain URL works fine) = `http://<desktop-lan-ip>:8090/data`.
-   Leave Headers/Body as `{}` if empty ones error.
-5. **Build** the extension for your model, then add its screen to a
-   **Playlist**. You'll assign that playlist to your Device in the next
-   step, once the Kindle has registered itself and created one.
+Terminus has a real, documented REST API for Models, Devices, Playlists and
+Screens (`doc/api.adoc` in a Terminus checkout; JWT auth via `POST /login`
+with the admin email/password you set during first-run setup) -- but
+**Extensions and Exchanges have no API at all**, checked directly against
+Terminus's own routes (`app/actions/api/` has devices, models, playlists,
+screens, setup, display, log, firmware; no extensions). The two scripts
+here reflect that split: one talks to the real API, the other drives
+Terminus's internal Ruby classes directly (the same ones its own web forms
+call), which works today but depends on internals that could change in a
+future Terminus release without notice -- the manual UI steps underneath
+each script always still work if it ever breaks.
 
-### 6. Autostart
+This is a two-pass workflow, because the Playlist step needs a Screen that
+only exists after a Build, and the Build needs a Model that only exists
+after the first pass:
+
+**Pass 1 -- create the Extension, Exchange, and Model:**
+
+```bash
+# Extension + Exchange (no REST API for these -- see manage_extension.rb's
+# own header comment for exactly what it does and why).
+docker cp terminus/api/manage_extension.rb terminus-web-1:/tmp/manage_extension.rb
+docker cp liquid/full.terminus.liquid terminus-web-1:/tmp/full.terminus.liquid
+docker exec \
+  -e EXTENSION_NAME=week_and_weather \
+  -e EXTENSION_LABEL="Week and Weather" \
+  -e TEMPLATE_FILE=/tmp/full.terminus.liquid \
+  -e EXCHANGE_URL=http://<desktop-lan-ip>:8090/data \
+  -e INTERVAL=2 -e UNIT=hour \
+  terminus-web-1 bash -c 'cd /app && bundle exec ruby /tmp/manage_extension.rb'
+
+# Model + Device (real API) -- MAC is your Kindle's, found via
+# KOReader's Menu -> Network -> Info. This first run will get as far as
+# creating the Model and Device, then stop with a clear message once it
+# can't find a Screen yet -- that's expected, keep the printed model id for
+# pass 2 (the Device API key you'll need for step 8 only prints once the
+# script completes successfully, i.e. after pass 2).
+export TERMINUS_URL=http://<desktop-lan-ip>:2300
+export TERMINUS_LOGIN=<your Terminus admin email>
+export TERMINUS_PASSWORD=<your Terminus admin password>
+export DEVICE_MAC=<kindle-mac-address>
+bash terminus/api/setup.sh
+```
+
+`setup.sh`'s Model is deliberately `800x600, bit_depth 2, rotation 0` by
+default (`MODEL_WIDTH`/`MODEL_HEIGHT`/`MODEL_LABEL`/`MODEL_NAME` env vars
+override it) -- **don't reuse one of Terminus's seeded device models
+without checking its Rotation value first**: several ship with
+`Rotation: 90` baked in for portrait-native e-readers, which silently
+rotates an otherwise-correct landscape render. Custom models also need
+their `css` field populated with something valid
+(`{"classes": {}, "variables": []}`, which is what both scripts set) --
+Terminus's `Model#css_classes` throws on a `nil` CSS field for a custom
+model, surfacing as an unexplained 500 error when building/previewing.
+
+**Pass 2 -- build the screen, then finish the Playlist/Device wiring:**
+
+```bash
+# Re-run manage_extension.rb with BUILD_MODEL_ID set to the id setup.sh
+# printed, to trigger a build for that model.
+docker exec \
+  -e EXTENSION_NAME=week_and_weather -e EXTENSION_LABEL="Week and Weather" \
+  -e TEMPLATE_FILE=/tmp/full.terminus.liquid \
+  -e EXCHANGE_URL=http://<desktop-lan-ip>:8090/data \
+  -e INTERVAL=2 -e UNIT=hour -e BUILD_MODEL_ID=<model-id-from-pass-1> \
+  terminus-web-1 bash -c 'cd /app && bundle exec ruby /tmp/manage_extension.rb'
+
+# Re-run setup.sh with the same env vars as before -- the screen exists
+# now, so this proceeds to create the Playlist and assign it to the Device.
+bash terminus/api/setup.sh
+```
+
+Both scripts are safe to re-run any time afterwards (e.g. after changing
+the template or the schedule) -- everything is found-or-created by matching
+name/MAC, never blindly duplicated.
+
+If you'd rather do any of this through the UI instead, open
+`http://<desktop-lan-ip>:2300`: **Extensions → New** (Kind: Poll, paste
+`full.terminus.liquid` into Template, add an Exchange with the data
+service's URL) → **Models → New** → **Build** the extension for that model
+→ **Playlists → New**, add the built screen → **Devices**, set its Model
+and Playlist.
+
+### 7. Autostart
 
 ```powershell
 # elevated PowerShell
-.\windows\setup-autostart-task.ps1
+& "\\wsl.localhost\Ubuntu\home\<you>\trmnl-selfhost\windows\setup-autostart-task.ps1"
 ```
 
 Registers a Task Scheduler task that boots the WSL distro at both Windows
@@ -300,24 +383,20 @@ systemctl --user enable --now trmnl-stack.service
 >   actively running inside. This silently killed the server repeatedly and
 >   looked exactly like a crash. `wslconfig.example` disables both.
 
-### 7. Kindle: KOReader plugins
+### 8. Kindle: KOReader plugins
 
 **`trmnl.koplugin`** (the display client -- install per its own
 [README](https://github.com/usetrmnl/trmnl-koreader) if you haven't
 already):
 
-1. Register the Kindle against Terminus (not `trmnl.com`) to get its API
-   key, using its MAC address (**Menu → Network → Info** in KOReader):
-   ```bash
-   curl -H "ID: <kindle-mac-address>" http://<desktop-lan-ip>:2300/api/setup
-   ```
-   Returns JSON including `api_key`. This auto-creates the device in
-   Terminus with a default model -- open **Devices** in Terminus's UI
-   afterwards and set its Model to the one you created in step 5, and
-   assign it the Playlist containing your dashboard's screen.
-2. **Tools → TRMNL Display → Configure TRMNL**: **Base URL** =
-   `http://<desktop-lan-ip>:2300`, **API Key** = the one from step 1.
-3. **Tools → TRMNL Display → Fetch screen now** to test.
+1. **Tools → TRMNL Display → Configure TRMNL**: **Base URL** =
+   `http://<desktop-lan-ip>:2300`, **API Key** = the one `setup.sh` printed
+   in step 6.
+2. **Tools → TRMNL Display → Fetch screen now** to test.
+
+(If you skipped the automation scripts and did step 6 entirely via the UI
+instead, get the API key from that Device's page in Terminus rather than
+from a script's output.)
 
 **`wol.koplugin`** (this repo's own plugin -- wakes the server before each
 fetch, since the desktop sleeps when idle):
@@ -326,7 +405,7 @@ Deploy it with the included script (auto-detects the Kindle's USB drive
 letter):
 
 ```powershell
-.\koreader\deploy-to-kindle.ps1
+& "\\wsl.localhost\Ubuntu\home\<you>\trmnl-selfhost\koreader\deploy-to-kindle.ps1"
 ```
 
 Then on the Kindle:
@@ -347,7 +426,7 @@ it mounts as, inside `/koreader/`) is the actual place to look -- KOReader
 keeps running other plugins even if one errors, so failures don't surface
 in the UI on their own.
 
-### 8. Power management
+### 9. Power management
 
 Wake-on-LAN is very likely your only remote-wake option (few consumer
 motherboards expose a scheduled/RTC wake setting in BIOS, and if yours
@@ -372,6 +451,7 @@ doesn't either, WoL is the fallback either way):
 ```
 app/                Data service (Google Calendar + Open-Meteo -> JSON)
 terminus/           Config overrides applied on top of a Terminus checkout
+terminus/api/       Automation: real API (Model/Device/Playlist) + internal (Extension/Exchange)
 liquid/             Adapts a TRMNL Liquid template to run as a Terminus extension
 koreader/           wol.koplugin, plus a deploy script
 wsl/                WSL2/Podman setup: bootstrap script + config templates

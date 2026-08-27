@@ -27,9 +27,9 @@ if [ -z "$TARGET_USER" ] || [ "$TARGET_USER" = "root" ]; then
     exit 1
 fi
 
-echo "Installing podman, podman-docker..."
+echo "Installing podman, podman-docker, jq..."
 apt-get update -qq
-apt-get install -y podman podman-docker
+apt-get install -y podman podman-docker jq
 
 # The Ubuntu-packaged docker-compose (v1, Python) is too old to parse
 # Terminus's compose file -- it predates the modern Compose Specification

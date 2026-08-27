@@ -501,6 +501,25 @@ doesn't either, WoL is the fallback either way):
    on the hardware this was built against, even with the BIOS setting
    enabled, worth checking on your own hardware, but don't assume it
    works without testing.
+4. **Force a screen rebuild on every resume from sleep**, so a device
+   polling shortly after a WoL wake doesn't get whatever was already stale
+   when the desktop went to sleep:
+   ```powershell
+   # elevated PowerShell
+   & "\\wsl.localhost\Ubuntu\home\<you>\wsl-trmnl-selfhost\windows\setup-resume-rebuild-task.ps1"
+   ```
+   Shortening the Extension's poll interval (step 6) only bounds staleness
+   while the desktop stays awake between polls -- it does nothing for the
+   time the desktop spent asleep. Terminus's scheduler discards a poll
+   tick that was missed while suspended rather than catching up on it
+   (confirmed in rufus-scheduler's own source, `discard_past` defaults to
+   `true`), so left alone it just waits for the next aligned interval
+   boundary after waking, which can be nearly a full interval away
+   regardless of how long the desktop was asleep. This task instead
+   triggers an immediate rebuild on the standard Windows "resumed from
+   sleep" event, independent of any poll schedule. In testing this took
+   about 40 seconds end to end, so make sure `wol.koplugin`'s wake lead
+   time (step 8) comfortably exceeds that.
 
 ## Using a different dashboard template
 

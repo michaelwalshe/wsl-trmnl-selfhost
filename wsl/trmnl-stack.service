@@ -20,8 +20,13 @@ RemainAfterExit=yes
 # UID 1000 is the default first-user UID on most Linux distros including
 # WSL -- check yours with `id -u` if this socket path doesn't exist.
 Environment=DOCKER_HOST=unix:///run/user/1000/podman/podman.sock
-# Adjust these two paths if you cloned usetrmnl/terminus or this repo
-# somewhere other than directly under your home directory.
+# Adjust these paths to wherever you actually cloned usetrmnl/terminus and
+# this repo. %h (WSL home) is right if you cloned both natively inside WSL
+# -- the better-performing option generally. If you cloned this repo on the
+# Windows side instead (e.g. to keep it next to other Windows-side repos, or
+# to run `liquid/build.ps1` and git from Windows tooling), point at its
+# /mnt/c/... path instead, e.g.:
+#   /mnt/c/Users/<you>/source/personal/trmnl-selfhost/compose.yml
 ExecStart=/usr/local/bin/docker-compose -f %h/terminus/compose.yml -f %h/terminus/compose.override.yml up -d
 ExecStart=/usr/local/bin/docker-compose -f %h/trmnl-selfhost/compose.yml up -d
 ExecStop=/usr/local/bin/docker-compose -f %h/terminus/compose.yml -f %h/terminus/compose.override.yml down

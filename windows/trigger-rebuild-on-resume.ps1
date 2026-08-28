@@ -18,14 +18,16 @@ waking, so without this, the served image can be stale by however long
 the desktop was asleep -- not bounded to the poll interval the way it is
 during normal always-on operation.
 
-Re-copies manage_extension.rb and the built template into the container on
-every run rather than assuming they're still there from a previous setup
-step -- cheap, and avoids depending on container filesystem state
-surviving between runs. Runs everything as a single script inside WSL
-(rather than passing Windows paths to individual `wsl.exe -- docker ...`
-calls) since a Windows-style UNC path passed as an argument to a command
-that runs natively inside WSL doesn't get translated -- it's simply
-malformed there.
+The actual rebuild logic lives in the sibling resume-rebuild.sh, run as a
+real script file with plain positional arguments -- passing the same
+logic as a bash command *string* built up in PowerShell was tried first
+and is NOT reliable: a value containing spaces
+(EXTENSION_LABEL="Week and Weather") does not survive being marshaled as
+a single -c argument across the PowerShell -> wsl.exe -> bash boundary,
+confirmed live (it silently split into separate shell words and the
+script errored out before doing anything). This also re-copies
+manage_extension.rb and the built template into the container on every
+run rather than assuming they're still there from a previous setup step.
 
 .PARAMETER WslRepoPath
 Path to the repo as WSL itself sees it. Defaults to the WSL-native
@@ -50,35 +52,12 @@ $logFile = Join-Path $env:TEMP "trmnl-resume-rebuild.log"
 "$(Get-Date -Format o) starting" | Out-File -FilePath $logFile -Append
 
 try {
-    # Single-quoted here-string: nothing here is interpolated by
-    # PowerShell, so $(...), $state, $i etc. below are all plain bash,
-    # untouched until the .Replace() calls fill in the __TOKEN__ placeholders.
-    $bashScript = @'
-set -e
-for i in 1 2 3 4 5 6; do
-  state=$(docker inspect -f '{{.State.Running}}' __CONTAINER__ 2>/dev/null || echo false)
-  if [ "$state" = "true" ]; then break; fi
-  sleep 5
-done
-docker cp __REPO__/terminus/api/manage_extension.rb __CONTAINER__:/tmp/manage_extension.rb
-docker cp __REPO__/liquid/full.terminus.liquid __CONTAINER__:/tmp/full.terminus.liquid
-docker exec \
-  -e EXTENSION_NAME=__EXT_NAME__ \
-  -e "EXTENSION_LABEL=__EXT_LABEL__" \
-  -e TEMPLATE_FILE=/tmp/full.terminus.liquid \
-  -e EXCHANGE_URL=__EXCHANGE_URL__ \
-  -e INTERVAL=15 -e UNIT=minute -e BUILD_MODEL_ID=__MODEL_ID__ \
-  __CONTAINER__ bash -c 'cd /app && bundle exec ruby /tmp/manage_extension.rb'
-'@
+    # Linux-native path, same reasoning as WslRepoPath itself: this runs
+    # inside WSL via wsl.exe, so it needs a path WSL can resolve -- not the
+    # Windows-side UNC path this script's own file lives at.
+    $shScript = "$WslRepoPath/windows/resume-rebuild.sh"
 
-    $bashScript = $bashScript.Replace("__CONTAINER__", $ContainerName).
-        Replace("__REPO__", $WslRepoPath).
-        Replace("__EXT_NAME__", $ExtensionName).
-        Replace("__EXT_LABEL__", $ExtensionLabel).
-        Replace("__EXCHANGE_URL__", $ExchangeUrl).
-        Replace("__MODEL_ID__", $ModelId)
-
-    & wsl.exe -d Ubuntu -- bash -c $bashScript *>> $logFile
+    & wsl.exe -d Ubuntu -- bash $shScript $ContainerName $WslRepoPath $ExtensionName $ExtensionLabel $ExchangeUrl $ModelId *>> $logFile
 
     "$(Get-Date -Format o) done, exit code $LASTEXITCODE" | Out-File -FilePath $logFile -Append
 }

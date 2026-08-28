@@ -160,9 +160,16 @@ def fetch_weather() -> dict:
     data = resp.json()
 
     tz = ZoneInfo(TIMEZONE)
-    now = datetime.now(tz)
-
     current = data["current"]
+    # Anchored to Open-Meteo's own clock, not this machine's -- a self-hosted
+    # server that sleeps can have a container clock that's transiently stale
+    # for a while right after waking (a known suspend/resume quirk), and this
+    # value drives which hours count as "upcoming" below. datetime.now(tz)
+    # looked fine in isolation but, following exactly that kind of wake, put
+    # the whole hourly window in the past relative to the *template's* own
+    # (separately evaluated, already-resynced) idea of "now" -- correct data,
+    # anchored to the wrong instant.
+    now = datetime.fromisoformat(current["time"]).replace(tzinfo=tz)
     daily = data["daily"]
     hourly = data["hourly"]
 

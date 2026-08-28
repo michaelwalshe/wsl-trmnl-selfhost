@@ -17,6 +17,18 @@ rather than catching up on them when the process was paused, so simply
 shortening the poll interval (README step 6) doesn't guarantee freshness
 right after a wake.
 
+Deploys a local copy of trigger-rebuild-on-resume.ps1 under
+%LOCALAPPDATA% and points the task at that, rather than at the repo's own
+\\wsl.localhost\... path directly -- confirmed live that a task run under
+S4U logon (non-interactive, no desktop session) can't reliably load a
+script from a \\wsl.localhost\... UNC path: the task completed instantly
+with no error, but none of the target script's own code ever ran (not
+even its first line), across two different script versions, while
+running the exact same file directly in an interactive session worked
+both times. A local path sidesteps needing the WSL 9P redirector to be
+available in that session at all. Re-run this script after editing
+trigger-rebuild-on-resume.ps1 to redeploy the local copy.
+
 .PARAMETER RepoPath
 UNC path to the wsl-trmnl-selfhost repo. Defaults to this machine's own
 WSL-native path.
@@ -36,11 +48,17 @@ if (-not $isAdmin) {
     exit 1
 }
 
-$scriptPath = Join-Path $RepoPath "windows\trigger-rebuild-on-resume.ps1"
-if (-not (Test-Path $scriptPath)) {
-    Write-Error "Could not find $scriptPath -- pass -RepoPath if this repo isn't at the default location."
+$sourceScriptPath = Join-Path $RepoPath "windows\trigger-rebuild-on-resume.ps1"
+if (-not (Test-Path $sourceScriptPath)) {
+    Write-Error "Could not find $sourceScriptPath -- pass -RepoPath if this repo isn't at the default location."
     exit 1
 }
+
+$localDir = Join-Path $env:LOCALAPPDATA "wsl-trmnl-selfhost"
+New-Item -ItemType Directory -Path $localDir -Force | Out-Null
+$scriptPath = Join-Path $localDir "trigger-rebuild-on-resume.ps1"
+Copy-Item -Path $sourceScriptPath -Destination $scriptPath -Force
+Write-Host "Deployed $sourceScriptPath -> $scriptPath"
 
 $taskName = "WSL-Podman-ResumeRebuild"
 

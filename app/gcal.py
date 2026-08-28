@@ -43,14 +43,18 @@ def _iso_with_offset(dt: datetime) -> str:
     )
 
 
-def _event_datetime(node: dict, tz: ZoneInfo) -> tuple[str, bool]:
-    """Returns (iso_or_date_string, is_all_day)."""
+def _localized_event_datetime(node: dict, tz: ZoneInfo) -> datetime | None:
+    """None for all-day events (no dateTime, just a bare date)."""
     if "date" in node:
-        return node["date"], True
+        return None
     dt = datetime.fromisoformat(node["dateTime"])
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=tz)
-    return _iso_with_offset(dt), False
+    # Google returns dateTime with whatever offset the event's own calendar
+    # is configured in -- not necessarily LOCAL_TIMEZONE (the M365 work
+    # calendar synced into this account, for instance, can come back in
+    # UTC). astimezone() converts an aware value properly; a naive one is
+    # assumed to already be in tz, matching how Google represents it when
+    # a timeZone field accompanies a plain (offset-less) dateTime.
+    return dt.astimezone(tz) if dt.tzinfo else dt.replace(tzinfo=tz)
 
 
 def fetch_calendar_source() -> dict:
@@ -94,13 +98,14 @@ def fetch_calendar_source() -> dict:
             for evt in resp.get("items", []):
                 if "dateTime" not in evt.get("start", {}) and "date" not in evt.get("start", {}):
                     continue  # no start time at all -- skip
-                start_full, all_day = _event_datetime(evt["start"], tz)
-                end_full, _ = _event_datetime(evt["end"], tz)
+                start_dt = _localized_event_datetime(evt["start"], tz)
+                end_dt = _localized_event_datetime(evt["end"], tz)
+                all_day = start_dt is None
 
-                start_label = end_label = None
-                if not all_day:
-                    start_label = datetime.fromisoformat(evt["start"]["dateTime"]).strftime("%H:%M")
-                    end_label = datetime.fromisoformat(evt["end"]["dateTime"]).strftime("%H:%M")
+                start_full = _iso_with_offset(start_dt) if start_dt else evt["start"]["date"]
+                end_full = _iso_with_offset(end_dt) if end_dt else evt["end"]["date"]
+                start_label = start_dt.strftime("%H:%M") if start_dt else None
+                end_label = end_dt.strftime("%H:%M") if end_dt else None
 
                 # Descriptions often carry dial-in PINs, passcodes and attendee
                 # lists (Teams/Zoom auto-invites in particular). The template

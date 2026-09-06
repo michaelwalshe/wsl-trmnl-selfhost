@@ -23,7 +23,7 @@ log = logging.getLogger("trmnl-data")
 app = Flask(__name__)
 
 CACHE_TTL_SECONDS = 15 * 60
-_cache: dict = {"payload": None, "fetched_at": 0.0}
+_cache: dict = {"payload": None, "fetched_at": 0.0, "last_error": None}
 
 
 def _build_payload() -> dict:
@@ -40,8 +40,9 @@ def get_payload() -> dict:
 
     try:
         payload = _build_payload()
-    except Exception:
+    except Exception as exc:
         log.exception("Failed to build dashboard payload")
+        _cache["last_error"] = str(exc)
         if _cache["payload"] is not None:
             log.warning("Serving stale cached payload (age=%.0fs)", age)
             return _cache["payload"]
@@ -49,6 +50,7 @@ def get_payload() -> dict:
 
     _cache["payload"] = payload
     _cache["fetched_at"] = time.time()
+    _cache["last_error"] = None
     return payload
 
 
@@ -59,6 +61,21 @@ def data():
 
 @app.get("/health")
 def health():
+    # Reflects whether the payload can actually be built, not just whether
+    # the Flask process is alive -- a silent build failure (expired Google
+    # token, Open-Meteo down, etc.) previously stayed invisible behind a
+    # permanently "ok" health check while Terminus kept re-serving a
+    # steadily staler cached screen. Podman's healthcheck (compose.yml)
+    # polls this, so a real failure now shows as "unhealthy" in `docker ps`.
+    if _cache["last_error"] is not None:
+        body = {
+            "status": "degraded",
+            "last_error": _cache["last_error"],
+            "cache_age_seconds": (
+                round(time.time() - _cache["fetched_at"]) if _cache["payload"] is not None else None
+            ),
+        }
+        return body, 503
     return {"status": "ok"}
 
 

@@ -9,6 +9,8 @@ services:
       WEATHER_LATITUDE: ${WEATHER_LATITUDE:?set in .env, see .env.example}
       WEATHER_LONGITUDE: ${WEATHER_LONGITUDE:?set in .env, see .env.example}
       LOCAL_TIMEZONE: ${LOCAL_TIMEZONE:?set in .env, see .env.example}
+      EXCLUDED_EVENT_SUMMARY_PATTERNS: ${EXCLUDED_EVENT_SUMMARY_PATTERNS:-}
+      EXCLUDED_CALENDAR_SUMMARIES: ${EXCLUDED_CALENDAR_SUMMARIES:-}
     ports:
       - "8090:8090"
     volumes:

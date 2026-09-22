@@ -15,3 +15,13 @@ def required_env(name: str) -> str:
     if not value:
         raise RuntimeError(f"{name} must be set -- see .env.example.")
     return value
+
+
+def optional_env_list(name: str, separator: str = ",") -> list[str]:
+    """Comma-separated env var -> list of stripped, non-empty entries.
+
+    Defaults to an empty list -- for personal-preference settings (e.g.
+    which events to exclude) that have no meaningful default value.
+    """
+    raw = os.environ.get(name, "")
+    return [item.strip() for item in raw.split(separator) if item.strip()]

@@ -9,6 +9,7 @@ sees it today) into one rolling week of events.
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -16,7 +17,7 @@ from zoneinfo import ZoneInfo
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
-from env import required_env
+from env import optional_env_list, required_env
 
 # Defaults to the host layout (../secrets relative to this file); the
 # container overrides this via SECRETS_DIR since it only copies app/*.py in,
@@ -28,8 +29,22 @@ TOKEN_FILE = SECRETS_DIR / "google_token.json"
 TIMEZONE = required_env("LOCAL_TIMEZONE")
 DAYS_AHEAD = 7
 
-# Calendars to skip entirely, by summary.
-EXCLUDED_CALENDAR_SUMMARIES: set[str] = set()
+# Calendars to skip entirely, by summary -- case-insensitive exact match
+# (not a pattern like the event filter below: calendar names are short,
+# fixed strings, so substring matching risks hiding an unrelated calendar
+# with a similar name). Personal preference, so it's an env var, not
+# hardcoded here.
+EXCLUDED_CALENDAR_SUMMARIES: set[str] = {
+    name.lower() for name in optional_env_list("EXCLUDED_CALENDAR_SUMMARIES")
+}
+
+# Events to skip, by summary -- case-insensitive substring/regex match
+# (e.g. "Complete Timesheet" for a recurring reminder nobody wants on the
+# dashboard). Personal preference, so it's an env var, not hardcoded here.
+EXCLUDED_EVENT_SUMMARY_PATTERNS: list[re.Pattern] = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in optional_env_list("EXCLUDED_EVENT_SUMMARY_PATTERNS")
+]
 
 
 def _iso_with_offset(dt: datetime) -> str:
@@ -73,7 +88,7 @@ def fetch_calendar_source() -> dict:
 
     events: list[dict] = []
     for cal in calendars:
-        if cal.get("summary") in EXCLUDED_CALENDAR_SUMMARIES:
+        if cal.get("summary", "").lower() in EXCLUDED_CALENDAR_SUMMARIES:
             continue
 
         page_token = None
@@ -98,6 +113,9 @@ def fetch_calendar_source() -> dict:
             for evt in resp.get("items", []):
                 if "dateTime" not in evt.get("start", {}) and "date" not in evt.get("start", {}):
                     continue  # no start time at all -- skip
+                summary = evt.get("summary", "(No title)")
+                if any(p.search(summary) for p in EXCLUDED_EVENT_SUMMARY_PATTERNS):
+                    continue
                 start_dt = _localized_event_datetime(evt["start"], tz)
                 end_dt = _localized_event_datetime(evt["end"], tz)
                 all_day = start_dt is None
@@ -116,7 +134,7 @@ def fetch_calendar_source() -> dict:
 
                 events.append(
                     {
-                        "summary": evt.get("summary", "(No title)"),
+                        "summary": summary,
                         "all_day": all_day,
                         "status": evt.get("status", "confirmed"),
                         "start": start_label,

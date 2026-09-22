@@ -256,6 +256,17 @@ docker compose up -d
 > dial-in PINs and attendee email lists, which is more than a dashboard
 > needs to request over the network even before considering whether to
 > display it.
+>
+> **On hiding events:** set `EXCLUDED_EVENT_SUMMARY_PATTERNS` in `.env` to a
+> comma-separated list of patterns (case-insensitive substring match, or a
+> full regex) to drop any event whose summary matches one, e.g.
+> `EXCLUDED_EVENT_SUMMARY_PATTERNS=Complete Timesheet` to hide a recurring
+> reminder you don't want on the dashboard. Leave unset to show everything.
+>
+> **On hiding whole calendars:** set `EXCLUDED_CALENDAR_SUMMARIES` in `.env`
+> to a comma-separated list of calendar names (case-insensitive exact
+> match, not a pattern) to skip a calendar entirely -- e.g. one you're
+> subscribed to but don't want on the dashboard at all.
 
 ### 5. The Liquid template
 

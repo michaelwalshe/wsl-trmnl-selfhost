@@ -166,6 +166,24 @@ def fetch_calendar_source() -> dict:
         deduped.append(evt)
     events = deduped
 
+    # The day grid's lane-packing layout (Google-Calendar-style, greedy
+    # left-to-right by start time) needs events in true chronological order
+    # to work -- Google's orderBy=startTime above only sorts each calendar's
+    # own results, so events from different calendars still arrive grouped
+    # by calendar, not merged by time. Without this, two genuinely
+    # overlapping events from different calendars can land in the same
+    # lane (the template's greedy algorithm is only correct when fed
+    # events in start-time order) and render stacked directly on top of
+    # each other -- indistinguishable from a solid block on a 2-bit
+    # display -- even though there was actually room for both side by side.
+    events.sort(
+        key=lambda evt: (
+            datetime.strptime(evt["start_full"], "%Y-%m-%d").replace(tzinfo=tz)
+            if evt["all_day"]
+            else datetime.fromisoformat(evt["start_full"])
+        )
+    )
+
     return {
         "tz": TIMEZONE,
         "today_in_tz": _iso_with_offset(today),
